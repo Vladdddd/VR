@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+
+
+<title>PA#1</title>
+<style>
+    body {
+        background-color: #EEEEEE;
+    }
+</style>
+
+<script src="./Utils/trackball-rotator.js"></script>
+<script src="./Utils/m4.js"></script>
+<script src="./shader.gpu"></script>
+<script src="./main.js"></script>
+
+</head>
+<body onload="init()">
+
+<h2>Shoe Surface</h2>
+
+<p id="message">Drag your mouse on the cube to rotate it.<br>
+(On a touch screen, you can use your finger.)</p>
+
+<div>
+    <div>
+        <span>Convergence</span>
+        <input type="range" id="convergence" min="1" max="50" value="50" step="1"/>
+        <span></span>
+      </div>
+    <div>
+        <span>Eye Separation</span>
+        <input type="range" id="separation" min="0.1" max="2" value="1" step="0.1"/>
+        <span></span>
+      </div>
+      <div>
+        <span>Field OF View</span>
+        <input type="range" id="fov" min="1" max="180" value="45" step="1"/>
+        <span></span>
+      </div>
+      <div>
+        <span>Near Clipping Distance</span>
+        <input type="range" id="near_clipping" min="3" max="7" value="1" step="0.1"/>
+        <span></span>
+      </div>
+</div>
+
+<div id="canvas-holder">
+   <canvas width="600" height="600" id="webglcanvas" style="background-color:red"></canvas>
+</div>
+
+
+</body></html>
