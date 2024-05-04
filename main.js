@@ -6,6 +6,13 @@ let shProgram;
 let spaceball;
 let cam;
 
+let video;
+let vTexture;
+let vModel;
+
+const vModelBufferData = [-1, -1, 0, 1, 1, 0, 1, -1, 0, 1, 1, 0, -1, -1, 0, -1, 1, 0];
+const vModelTBufferData = [1, 1, 0, 0, 0, 1, 0, 0, 1, 1, 1, 0];
+
 let x1 = -1;
 let x2 = 1;
 let y1 = -1;
@@ -19,6 +26,34 @@ let convergence = 25, separation = 1, fov = 45, near_clipping = 1;
 
 function deg2rad(angle) {
   return (angle * Math.PI) / 180;
+}
+
+function createVideo() {
+  const video = document.createElement('video');
+  video.setAttribute('autoplay', true);
+  
+  navigator.getUserMedia(
+    { video: true, audio: false }, 
+    (stream) => {
+      video.srcObject = stream;
+    },
+    (e) => {
+      console.error(`The following error occurred: ${e.name}`);
+    }
+  );
+
+  return video;
+}
+function createVTexture() {
+  const vTexture = gl.createTexture();
+
+  gl.bindTexture(gl.TEXTURE_2D, vTexture);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+
+  return vTexture;
 }
 
 class StereoCamera {
@@ -79,6 +114,7 @@ function Model(name) {
   this.name = name;
   this.iVertexBuffer = gl.createBuffer();
   this.count = 0;
+  this.iVertexTextureBuffer = gl.createBuffer();
 
   this.BufferData = function (vertices, normals) {
     gl.bindBuffer(gl.ARRAY_BUFFER, this.iVertexBuffer);
@@ -105,6 +141,21 @@ function Model(name) {
       gl.drawArrays(gl.LINE_STRIP - 2, n * i, n);
     }
   }
+
+  this.TextureBufferData = function (vertices) {
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.iVertexTextureBuffer);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertices), gl.STREAM_DRAW);
+  }
+
+  this.DrawTextured = function () {
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.iVertexBuffer);
+    gl.vertexAttribPointer(shProgram.iAttribVertex, 3, gl.FLOAT, false, 0, 0);
+    gl.enableVertexAttribArray(shProgram.iAttribVertex);
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.iVertexTextureBuffer);
+    gl.vertexAttribPointer(shProgram.iAttribVertexTexture, 2, gl.FLOAT, false, 0, 0);
+    gl.enableVertexAttribArray(shProgram.iAttribVertexTexture);
+    gl.drawArrays(gl.TRIANGLES, 0, this.count);
+  }
 }
 
 function ShaderProgram(name, program) {
@@ -120,29 +171,41 @@ function ShaderProgram(name, program) {
   };
 }
 
-function draw() {
-    gl.clearColor(0, 0, 0, 1);
-    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+function draw(animate=false) {
+  gl.clearColor(0, 0, 0, 1);
+  gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
-    /* Set the values of the projection transformation */
-    let projection = m4.perspective(Math.PI / 8, 1, 8, 12);
+  let projection = m4.perspective(Math.PI / 8, 1, 8, 12);
+  let modelView = spaceball.getViewMatrix();
 
-    /* Get the view matrix from the SimpleRotator object.*/
-    let modelView = spaceball.getViewMatrix();
+  let rotateToPointZero = m4.axisRotation([0.707, 0.707, 0], 0.7);
+  let translateToPointZero = m4.translation(0, 0, -5);
 
-    let rotateToPointZero = m4.axisRotation([0.707, 0.707, 0], 0.7);
-    let translateToPointZero = m4.translation(0, 0, -5);
+  let matAccum0 = m4.multiply(rotateToPointZero, modelView);
+  let matAccum1 = m4.multiply(translateToPointZero, matAccum0);
 
-    let matAccum0 = m4.multiply(rotateToPointZero, modelView);
-    let matAccum1 = m4.multiply(translateToPointZero, matAccum0);
+  gl.uniform1f(shProgram.iT, true);
+  gl.bindTexture(gl.TEXTURE_2D, vTexture);
+  gl.texImage2D(
+        gl.TEXTURE_2D,
+        0,
+        gl.RGBA,
+        gl.RGBA,
+        gl.UNSIGNED_BYTE,
+        video
+  );
+  gl.uniformMatrix4fv(shProgram.iModelViewProjectionMatrix, false, m4.identity());
+  vModel.DrawTextured();
+  gl.clear(gl.DEPTH_BUFFER_BIT)
+  gl.uniform1f(shProgram.iT, false);
 
-    let modelViewProjection = m4.multiply(projection, matAccum1);
+  let modelViewProjection = m4.multiply(projection, matAccum1);
 	
-    cam.ApplyLeftFrustum();
+  cam.ApplyLeftFrustum();
     
 	modelViewProjection = m4.multiply(cam.projection, m4.multiply(cam.modelView, matAccum1));
-    gl.uniformMatrix4fv(shProgram.iModelViewProjectionMatrix, false, modelViewProjection);
-    gl.colorMask(true, false, false, false);
+  gl.uniformMatrix4fv(shProgram.iModelViewProjectionMatrix, false, modelViewProjection);
+  gl.colorMask(true, false, false, false);
     
 	gl.uniform4fv(shProgram.iColor, [1, 1, 0, 1]);
 	surface.Draw();
@@ -150,21 +213,25 @@ function draw() {
 	gl.uniform4fv(shProgram.iColor, [0, 0, 1, 1]);
 	surface.DrawLines();
 
-    gl.clear(gl.DEPTH_BUFFER_BIT);
+  gl.clear(gl.DEPTH_BUFFER_BIT);
 
-    cam.ApplyRightFrustum();
+  cam.ApplyRightFrustum();
 	
-    modelViewProjection = m4.multiply(cam.projection, m4.multiply(cam.modelView, matAccum1));
-    gl.uniformMatrix4fv(shProgram.iModelViewProjectionMatrix, false, modelViewProjection);
-    gl.colorMask(false, true, true, false);
+  modelViewProjection = m4.multiply(cam.projection, m4.multiply(cam.modelView, matAccum1));
+  gl.uniformMatrix4fv(shProgram.iModelViewProjectionMatrix, false, modelViewProjection);
+  gl.colorMask(false, true, true, false);
     
 	gl.uniform4fv(shProgram.iColor, [1, 1, 0, 1]);
-    surface.Draw();
+  surface.Draw();
     
 	gl.uniform4fv(shProgram.iColor, [0, 0, 1, 1]);
-    surface.DrawLines();
+  surface.DrawLines();
 
-    gl.colorMask(true, true, true, true);
+  gl.colorMask(true, true, true, true);
+
+  if (animate) {
+    window.requestAnimationFrame(()=>draw(true));
+  }
 }
 
 function CreateShoeSurfaceData() {
@@ -198,10 +265,17 @@ function initGL() {
   shProgram.iAttribVertex = gl.getAttribLocation(prog, "vertex");
   shProgram.iModelViewProjectionMatrix = gl.getUniformLocation(prog, "ModelViewProjectionMatrix");
   shProgram.iColor = gl.getUniformLocation(prog, "color");
+  shProgram.iAttribVertexTexture = gl.getAttribLocation(prog, "textureCoords");
+  shProgram.iT = gl.getUniformLocation(prog, "textured");
 
   surface = new Model("Surface");
   const surfaceData = CreateShoeSurfaceData();
   surface.BufferData(surfaceData);
+
+  surface.TextureBufferData(CreateShoeSurfaceData(),);
+  vModel = new Model('Video');
+  vModel.BufferData(vModelBufferData);
+  vModel.TextureBufferData(vModelTBufferData);
 
   gl.enable(gl.DEPTH_TEST);
 }
@@ -230,6 +304,7 @@ function createProgram(gl, vShader, fShader) {
 }
 
 function init() {
+  video = createVideo();
   let canvas;
 
   document.getElementById('convergence').addEventListener("change", () => {
@@ -275,7 +350,6 @@ function init() {
   }
 
   try {
-        // Set up the stereo camera system
         cam = new StereoCamera(
             convergence,    
             separation,       
@@ -291,7 +365,8 @@ function init() {
         return;
     }
 
+  vTexture = createVTexture();
   spaceball = new TrackballRotator(canvas, draw, 0);
 
-  draw();
+  draw(true);
 }

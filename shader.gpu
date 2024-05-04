@@ -1,9 +1,15 @@
 // Vertex shader
 const vertexShaderSource = `
+attribute vec2 textureCoords;
 attribute vec3 vertex;
 uniform mat4 ModelViewProjectionMatrix;
+uniform bool textured;
+varying vec2 vTextureCoords;
 
 void main() {
+    if(textured){
+        vTextureCoords=textureCoords;
+    }
     gl_Position = ModelViewProjectionMatrix * vec4(vertex,1.0);
 }`;
 
@@ -16,6 +22,14 @@ const fragmentShaderSource = `
 #endif
 
 uniform vec4 color;
+uniform sampler2D textureU;
+uniform bool textured;
+varying vec2 vTextureCoords;
+
 void main() {
+    vec4 tColor = texture2D(textureU, vTextureCoords);
     gl_FragColor = color;
+    if(textured){
+        gl_FragColor = tColor;
+    }
 }`;
