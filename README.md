@@ -1,6 +1,7 @@
-# Practical assignment #2
+# RGR
 
 Lyshtvan Vladyslav TR-32mp
 Variant 13 Shoe Surface
 
-![image](/assets/lab2.png)
+![image](/assets/rgr.png)
+![](/assets/example.mp4)

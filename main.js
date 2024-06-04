@@ -9,6 +9,7 @@ let cam;
 let video;
 let vTexture;
 let vModel;
+let sphere;
 
 const vModelBufferData = [-1, -1, 0, 1, 1, 0, 1, -1, 0, 1, 1, 0, -1, -1, 0, -1, 1, 0];
 const vModelTBufferData = [1, 1, 0, 0, 0, 1, 0, 0, 1, 1, 1, 0];
@@ -22,7 +23,7 @@ let lines = 0;
 const calcStepX = (x2 - x1) / 20;
 const calcStepY = (y2 - y1) / 20;
 const { PI, tan } = Math
-let convergence = 25, separation = 1, fov = 45, near_clipping = 1;
+let convergence = 25, separation = 1, fov = 120, near_clipping = 1;
 
 function deg2rad(angle) {
   return (angle * Math.PI) / 180;
@@ -106,7 +107,6 @@ class StereoCamera {
       this.projection = m4.frustum(left, right, bottom, top,
       this.mNearClippingDistance, this.mFarClippingDistance);
       this.modelView = m4.translation(-this.mEyeSeparation / 2, 0.0, 0.0);
-      
   }
 }
 
@@ -201,6 +201,14 @@ function draw(animate=false) {
 
   let modelViewProjection = m4.multiply(projection, matAccum1);
 	
+  const now = Date.now() * 0.0001;
+  gl.uniformMatrix4fv(shProgram.iModelViewProjectionMatrix, false, m4.translation(0.5 * Math.sin(now), 0.5 * Math.cos(now), 0));
+  if (panner) {
+    panner.setPosition(0.5 * Math.sin(now), 0.5 * Math.cos(now), 0)
+  }
+  sphere.Draw();
+  gl.clear(gl.DEPTH_BUFFER_BIT);
+
   cam.ApplyLeftFrustum();
     
 	modelViewProjection = m4.multiply(cam.projection, m4.multiply(cam.modelView, matAccum1));
@@ -256,6 +264,34 @@ let calculateZ = function (x, y) {
   return (x * x * x) / 3 - (y * y) / 2;
 };
 
+function CreateSphereData() {
+  let vertexList = [];
+
+  let i = 0
+  let j = 0;
+  while (i < Math.PI * 2) {
+    while (j < Math.PI) {
+        vertexList.push(...getSphereVertex(i, j));
+        vertexList.push(...getSphereVertex(i + 0.1, j));
+        vertexList.push(...getSphereVertex(i, j + 0.1));
+        vertexList.push(...getSphereVertex(i, j + 0.1));
+        vertexList.push(...getSphereVertex(i + 0.1, j));
+        vertexList.push(...getSphereVertex(i + 0.1, j + 0.1));
+        j += 0.1;
+    }
+    j = 0;
+    i += 0.1;
+  }
+  return vertexList;
+}
+function getSphereVertex(lng, lat) {
+  return [
+    Math.cos(lng) * Math.sin(lat) * 0.1,
+    Math.sin(lng) * Math.sin(lat) * 0.1,
+    Math.cos(lat) * 0.1
+  ]
+}
+
 function initGL() {
   let prog = createProgram(gl, vertexShaderSource, fragmentShaderSource);
 
@@ -271,6 +307,11 @@ function initGL() {
   surface = new Model("Surface");
   const surfaceData = CreateShoeSurfaceData();
   surface.BufferData(surfaceData);
+
+  let sphereData = CreateSphereData();
+  sphere = new Model()
+  sphere.BufferData(sphereData, sphereData, new Array(sphereData.length).fill(1))
+  sphere.TextureBufferData(sphereData);
 
   surface.TextureBufferData(CreateShoeSurfaceData(),);
   vModel = new Model('Video');
@@ -369,4 +410,51 @@ function init() {
   spaceball = new TrackballRotator(canvas, draw, 0);
 
   draw(true);
+}
+
+let audioContext;
+let audio = null;
+let src;
+let peakingFilter;
+let panner;
+
+function setupAudioListeners() {
+  audio = document.getElementById('audioElement');
+  audio.addEventListener('play', () => {
+    if (!audioContext) {
+      //console.log("here")
+      audioContext = new AudioContext();
+      src = audioContext.createMediaElementSource(audio);
+      panner = audioContext.createPanner();
+      peakingFilter = audioContext.createBiquadFilter();
+      src.connect(panner);
+      panner.connect(peakingFilter);
+      peakingFilter.connect(audioContext.destination);
+      peakingFilter.type = 'peaking';
+      peakingFilter.frequency.value = 1000;
+      peakingFilter.Q.value = 4;
+      peakingFilter.gain.value = 12;
+      audioContext.resume();
+    }
+  });
+  audio.addEventListener('pause', () => {
+    console.log('pause');
+    audioContext.resume();
+  });
+}
+
+function initAudio() {
+  setupAudioListeners();
+  let filterListener = document.getElementById('filterEnabled');
+  filterListener.addEventListener('change', function () {
+    if (filterListener.checked) {
+      panner.disconnect();
+      panner.connect(peakingFilter);
+      peakingFilter.connect(audioContext.destination);
+    } else {
+      panner.disconnect();
+      panner.connect(audioContext.destination);
+    }
+  });
+  audio.play();
 }
