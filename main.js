@@ -419,6 +419,10 @@ let peakingFilter;
 let panner;
 
 function setupAudioListeners() {
+  const frequency = document.getElementById("frequency");
+  const Q = document.getElementById("Q");
+  const gain = document.getElementById("gain");
+
   audio = document.getElementById('audioElement');
   audio.addEventListener('play', () => {
     if (!audioContext) {
@@ -431,9 +435,9 @@ function setupAudioListeners() {
       panner.connect(peakingFilter);
       peakingFilter.connect(audioContext.destination);
       peakingFilter.type = 'peaking';
-      peakingFilter.frequency.value = 1000;
-      peakingFilter.Q.value = 4;
-      peakingFilter.gain.value = 12;
+      peakingFilter.frequency.value = frequency.value;
+      peakingFilter.Q.value = Q.value;
+      peakingFilter.gain.value = gain.value;
       audioContext.resume();
     }
   });
